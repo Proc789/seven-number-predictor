@@ -116,9 +116,8 @@ def index():
                 result = prediction
             else:
                 result = "請至少輸入三期資料後才可預測"
-
-        except:
-            result = "格式錯誤，請輸入 1~10 的整數"
+        except Exception as e:
+            result = f"格式錯誤，請輸入 1~10 的整數 ({e})"
 
     toggle_text = "關閉訓練模式" if training else "啟動訓練模式"
     return render_template_string(TEMPLATE, result=result, history=history[-5:],
@@ -161,25 +160,19 @@ def generate_prediction(prev_random):
 
     candidate_freq = {n: flat.count(n) for n in set(flat)}
     candidates = [n for n in candidate_freq if candidate_freq[n] >= 2 and n not in (hot, dynamic_hot)]
-    pick = candidates[:2]
+    pick = candidates[:1]
 
-    recent6 = history[-6:]
-    flat6 = [n for g in recent6 for n in g]
-    cold_freq = {n: flat6.count(n) for n in range(1, 11)}
-    min_count = min(cold_freq.values())
-    cold_candidates = [n for n in cold_freq if cold_freq[n] == min_count and n not in (hot, dynamic_hot)]
-    cold = random.choice(cold_candidates) if cold_candidates else random.choice([n for n in range(1, 11) if n not in (hot, dynamic_hot)])
-
-    used = set([hot, dynamic_hot, cold] + pick)
+    used = set([hot, dynamic_hot] + pick)
     pool = [n for n in range(1, 11) if n not in used]
     random.shuffle(pool)
+
     for _ in range(10):
         rands = sorted(random.sample(pool, 7 - len(used)))
         if len(set(rands) & set(prev_random)) <= 2:
             break
 
-    final = sorted([hot, dynamic_hot, cold] + pick + rands)
+    final = sorted([hot, dynamic_hot] + pick + rands)
     return final, rands
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=3000)
+    app.run(host="0.0.0.0", port=5000)
