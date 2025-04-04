@@ -1,6 +1,5 @@
 from flask import Flask, render_template_string, request
 import random
-from collections import Counter
 
 app = Flask(__name__)
 history = []
@@ -15,11 +14,11 @@ TEMPLATE = """
 <!DOCTYPE html>
 <html>
 <head>
-  <title>7碼預測器（更新版）</title>
+  <title>7碼預測器</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
 </head>
 <body style="max-width: 400px; margin: auto; padding-top: 50px; text-align: center; font-family: sans-serif;">
-  <h2>7碼預測器（更新版）</h2>
+  <h2>7碼預測器</h2>
   <form method="POST">
     <input type="number" name="first" id="first" placeholder="冠軍號碼" required min="0" max="10"
            style="width: 80%; padding: 8px;" oninput="handleInput(this, 'second')"><br><br>
@@ -141,24 +140,39 @@ def generate_prediction(prev_random):
     recent = history[-3:]
     flat = [n for r in recent for n in r]
 
-    freq = Counter(flat)
-    hot_candidates = sorted(freq.items(), key=lambda x: (-x[1], -flat[::-1].index(x[0])))[:3]
-    hot = [n for n, _ in hot_candidates[:2]]
+    freq = {n: flat.count(n) for n in set(flat)}
+    max_count = max(freq.values())
+    hot_candidates = [n for n in freq if freq[n] == max_count]
+    for group in reversed(recent):
+        for n in group:
+            if n in hot_candidates:
+                hot = n
+                break
+        else:
+            continue
+        break
 
-    flat_dyn = [n for n in flat if n not in hot]
-    dyn_freq = Counter(flat_dyn)
-    top_dyn = sorted(dyn_freq.items(), key=lambda x: (-x[1], -flat_dyn[::-1].index(x[0])))[:3]
-    dynamic_hot = [n for n, _ in top_dyn[:2]]
+    last_champion = history[-1][0]
+    dynamic_hot = last_champion if last_champion != hot else next(
+        (n for n in hot_candidates if n != hot),
+        random.choice([n for n in range(1, 11) if n != hot])
+    )
 
-    used = set(hot + dynamic_hot)
+    candidate_freq = {n: flat.count(n) for n in set(flat)}
+    candidates = [n for n in candidate_freq if candidate_freq[n] >= 2 and n not in (hot, dynamic_hot)]
+    pick = candidates[:1]
+
+    used = set([hot, dynamic_hot] + pick)
     pool = [n for n in range(1, 11) if n not in used]
     random.shuffle(pool)
 
     for _ in range(10):
-        extra = random.sample(pool, 3)
-        if len(set(extra) & set(prev_random)) <= 2:
+        rands = sorted(random.sample(pool, 7 - len(used)))
+        if len(set(rands) & set(prev_random)) <= 2:
             break
 
-    return sorted(hot + dynamic_hot + extra), extra
+    final = sorted([hot, dynamic_hot] + pick + rands)
+    return final, rands
 
-app = app
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000)
