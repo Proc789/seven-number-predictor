@@ -5,6 +5,7 @@ from collections import Counter
 app = Flask(__name__)
 history = []
 predictions = []
+sources = []
 hot_hits = 0
 dynamic_hits = 0
 extra_hits = 0
@@ -94,45 +95,25 @@ def index():
             current = [first, second, third]
             history.append(current)
 
-            if len(predictions) >= 1:
-                champion = current[0]
-                if champion in predictions[-1]:
-                    if training_enabled:
-                        all_hits += 1
-                        current_stage = 1
-                else:
-                    if training_enabled:
-                        current_stage += 1
-                if training_enabled:
-                    total_tests += 1
-                    if champion in hot_numbers:
-                        hot_hits += 1
-                    elif champion in dynamic_numbers:
-                        dynamic_hits += 1
-                    elif champion in extra_numbers:
-                        extra_hits += 1
-
-            if len(history) >= 3:
-                flat = [n for g in history[-3:] for n in g]
-                freq = Counter(flat)
-
-                hot_pool = sorted(freq.items(), key=lambda x: (-x[1], -flat[::-1].index(x[0])))
-                hot_numbers = [n for n, _ in hot_pool[:2]]
-
-                flat_dynamic = [n for n in flat if n not in hot_numbers]
-                freq_dyn = Counter(flat_dynamic)
-                dyn_sorted = sorted(freq_dyn.items(), key=lambda x: (-x[1], -flat_dynamic[::-1].index(x[0])))
-                dynamic_numbers = [n for n, _ in dyn_sorted[:2]]
-
-                used = set(hot_numbers + dynamic_numbers)
-                pool = [n for n in range(1, 11) if n not in used]
-                random.shuffle(pool)
-                extra_numbers = pool[:3]
-
-                result = hot_numbers + dynamic_numbers + extra_numbers
-                prediction = sorted(result)
+            if len(history) >= 5 or training_enabled:
+                prediction = make_prediction()
                 predictions.append(prediction)
 
+                if len(predictions) >= 2:
+                    champion = current[0]
+                    total_tests += 1
+                    if champion in predictions[-2]:
+                        all_hits += 1
+                        current_stage = 1
+                    else:
+                        current_stage += 1
+
+                    if champion in sources[-1]['hot']:
+                        hot_hits += 1
+                    elif champion in sources[-1]['dynamic']:
+                        dynamic_hits += 1
+                    elif champion in sources[-1]['extra']:
+                        extra_hits += 1
         except:
             prediction = ['格式錯誤']
 
@@ -150,20 +131,41 @@ def index():
 
 @app.route('/toggle')
 def toggle():
-    global training_enabled, hot_hits, dynamic_hits, extra_hits, all_hits, total_tests, current_stage
+    global training_enabled, hot_hits, dynamic_hits, extra_hits, all_hits, total_tests, current_stage, predictions
     training_enabled = not training_enabled
     hot_hits = dynamic_hits = extra_hits = all_hits = total_tests = 0
     current_stage = 1
+    predictions = []
     return redirect('/')
 
 @app.route('/reset')
 def reset():
-    global history, predictions, hot_hits, dynamic_hits, extra_hits, all_hits, total_tests, current_stage
+    global history, predictions, hot_hits, dynamic_hits, extra_hits, all_hits, total_tests, current_stage, sources
     history.clear()
     predictions.clear()
+    sources.clear()
     hot_hits = dynamic_hits = extra_hits = all_hits = total_tests = 0
     current_stage = 1
     return redirect('/')
+
+def make_prediction():
+    recent = history[-3:]
+    flat = [n for g in recent for n in g]
+    freq = Counter(flat)
+
+    hot = [n for n, _ in freq.most_common(3)][:2]
+
+    dynamic_pool = [n for n in freq if n not in hot]
+    dynamic_sorted = sorted(dynamic_pool, key=lambda x: (-freq[x], -flat[::-1].index(x)))
+    dynamic = dynamic_sorted[:2]
+
+    used = set(hot + dynamic)
+    pool = [n for n in range(1, 11) if n not in used]
+    random.shuffle(pool)
+    extra = pool[:3]
+
+    sources.append({'hot': hot, 'dynamic': dynamic, 'extra': extra})
+    return sorted(hot + dynamic + extra)
 
 if __name__ == '__main__':
     app.run(debug=True)
